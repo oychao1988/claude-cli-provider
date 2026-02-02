@@ -175,7 +175,7 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
     const startTime = Date.now();
 
     // 执行 claude CLI
-    const child = spawn(CLAUDE_BIN, args);
+    const child = spawn(config.CLAUDE_BIN, args);
     let stdout = '';
     let stderr = '';
 
