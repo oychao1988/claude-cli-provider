@@ -1,22 +1,44 @@
 #!/usr/bin/env node
 
 /**
- * Claude CLI HTTP Server - MVP
+ * Claude CLI HTTP Server
  *
- * 最简实现：将 claude CLI 包装为 OpenAI 兼容的 HTTP API
+ * 将 claude CLI 包装为 OpenAI 兼容的 HTTP API
+ * 支持环境变量配置、API 认证、日志系统、优雅关闭
  *
  * 启动: node server.js
- * 默认: http://127.0.0.1:3912
+ * 默认: http://0.0.0.0:3912
  */
 
 import express from 'express';
 import { spawn } from 'node:child_process';
 
-const PORT = 3912;
-const CLAUDE_BIN = 'claude';
+// ============ 环境变量配置 ============
+const config = {
+  PORT: process.env.PORT || 3912,
+  HOST: process.env.HOST || '0.0.0.0',
+  CLAUDE_BIN: process.env.CLAUDE_BIN || 'claude',
+  API_KEY: process.env.API_KEY || '',
+  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+  NODE_ENV: process.env.NODE_ENV || 'development'
+};
+
+// ============ 日志系统 ============
+const logger = {
+  debug: (...args) => config.LOG_LEVEL === 'debug' && console.error('[DEBUG]', ...args),
+  info: (...args) => ['info', 'debug'].includes(config.LOG_LEVEL) && console.error('[INFO]', ...args),
+  warn: (...args) => console.error('[WARN]', ...args),
+  error: (...args) => console.error('[ERROR]', ...args)
+};
 
 const app = express();
 app.use(express.json());
+
+// 请求日志中间件
+app.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.path}`);
+  next();
+});
 
 /**
  * 解析 claude CLI 的 JSON 输出
@@ -63,6 +85,31 @@ function parseClaudeOutput(raw) {
   return events;
 }
 
+// ============ API Key 认证中间件 ============
+function authenticateApiKey(req, res, next) {
+  const apiKey = req.headers['authorization']?.replace('Bearer ', '') ||
+                 req.headers['x-api-key'];
+
+  if (!config.API_KEY) {
+    // 未配置 API Key，跳过认证（开发环境）
+    logger.debug('API Key not configured, skipping authentication');
+    return next();
+  }
+
+  if (apiKey !== config.API_KEY) {
+    logger.warn(`Authentication failed from ${req.ip}`);
+    return res.status(401).json({
+      error: {
+        message: 'Invalid API key',
+        type: 'authentication_error'
+      }
+    });
+  }
+
+  logger.debug('Authentication successful');
+  next();
+}
+
 /**
  * 从事件数组中提取 assistant 的文本回复
  */
@@ -82,11 +129,11 @@ function extractAssistantReply(events) {
  * POST /v1/chat/completions
  * OpenAI 兼容的聊天完成接口（支持流式和非流式）
  */
-app.post('/v1/chat/completions', async (req, res) => {
+app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
   try {
     const { messages, model = 'sonnet', stream = false } = req.body;
 
-    console.error(`[incoming] Request received: model=${model}, messages=${messages?.length}, stream=${stream}`);
+    logger.info(`Request received: model=${model}, messages=${messages?.length}, stream=${stream}`);
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Messages array required' });
@@ -113,7 +160,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       }
     }
 
-    console.error(`[claude] model=${model}, prompt="${prompt.substring(0, 50)}..."`);
+    logger.debug(`Prompt: "${prompt.substring(0, 50)}..."`);
 
     // 构建 claude CLI 命令
     const args = [
@@ -150,10 +197,10 @@ app.post('/v1/chat/completions', async (req, res) => {
     });
 
     const duration = Date.now() - startTime;
-    console.error(`[claude] completed in ${duration}ms, exit=${exitCode}`);
+    logger.info(`Claude CLI completed in ${duration}ms, exit=${exitCode}`);
 
     if (exitCode !== 0) {
-      console.error(`[claude] stderr: ${stderr}`);
+      logger.error(`Claude CLI stderr: ${stderr}`);
       return res.status(500).json({
         error: {
           message: `Claude CLI failed with exit code ${exitCode}`,
@@ -167,7 +214,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     const reply = extractAssistantReply(events);
 
     if (!reply) {
-      console.error(`[claude] No reply found in ${events.length} events`);
+      logger.error(`No reply found in ${events.length} events`);
       return res.status(500).json({
         error: {
           message: 'Failed to extract reply from claude CLI',
@@ -271,7 +318,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('[server] Error:', error);
+    logger.error('Server error:', error);
     res.status(500).json({
       error: {
         message: error.message,
@@ -290,14 +337,15 @@ function sendSSEChunk(res, data) {
 
 /**
  * GET /health
- * 健康检查端点
+ * 健康检查端点（无需认证）
  */
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'claude-cli-provider',
-    version: '1.0.0-mvp',
-    claude_bin: CLAUDE_BIN
+    version: '1.0.0',
+    claude_bin: config.CLAUDE_BIN,
+    auth_enabled: !!config.API_KEY
   });
 });
 
@@ -305,7 +353,7 @@ app.get('/health', (req, res) => {
  * GET /v1/models
  * 列出可用模型
  */
-app.get('/v1/models', (req, res) => {
+app.get('/v1/models', authenticateApiKey, (req, res) => {
   res.json({
     object: 'list',
     data: [
@@ -316,14 +364,35 @@ app.get('/v1/models', (req, res) => {
   });
 });
 
-// 启动服务器
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`✅ Claude CLI Provider Server running`);
-  console.log(`   URL: http://127.0.0.1:${PORT}`);
-  console.log(`   Health: http://127.0.0.1:${PORT}/health`);
-  console.log(`   Using: ${CLAUDE_BIN}`);
-  console.log(`\n📝 Example curl:`);
-  console.log(`   curl -X POST http://127.0.0.1:${PORT}/v1/chat/completions \\`);
-  console.log(`     -H "Content-Type: application/json" \\`);
-  console.log(`     -d '{"model":"sonnet","messages":[{"role":"user","content":"2+2=?"}]}'`);
+// ============ 启动服务器 ============
+const server = app.listen(config.PORT, config.HOST, () => {
+  logger.info(`✅ Claude CLI Provider Server running`);
+  logger.info(`   URL: http://${config.HOST}:${config.PORT}`);
+  logger.info(`   Health: http://${config.HOST}:${config.PORT}/health`);
+  logger.info(`   Environment: ${config.NODE_ENV}`);
+  logger.info(`   Using: ${config.CLAUDE_BIN}`);
+  logger.info(`   API Authentication: ${config.API_KEY ? 'enabled' : 'disabled'}`);
+
+  if (!config.API_KEY && config.NODE_ENV === 'production') {
+    logger.warn('⚠️  Running in production without API_KEY authentication!');
+  }
 });
+
+// ============ 优雅关闭 ============
+const gracefulShutdown = (signal) => {
+  logger.info(`${signal} received, shutting down gracefully...`);
+
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+
+  // 强制关闭超时
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
