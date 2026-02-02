@@ -1,112 +1,116 @@
 # Claude CLI Provider
 
-将全局安装的 `claude` CLI 包装为 OpenClaw 可用的 HTTP Provider。
+将 Claude Code CLI 包装为 OpenAI 兼容的 HTTP API，支持流式输出。
+
+## 特性
+
+- ✅ **OpenAI 兼容 API** - 兼容 `/v1/chat/completions` 接口
+- ✅ **真流式输出** - 使用 Claude CLI 的原生流式功能
+- ✅ **API Key 认证** - 生产环境安全保护
+- ✅ **多部署方式** - 支持 Docker 和 PM2 部署
+- ✅ **环境变量配置** - 灵活的配置管理
+- ✅ **健康检查** - 内置监控端点
 
 ## 快速开始
 
 ### 1. 安装依赖
 
 ```bash
-cd ~/Documents/Projects/claude-cli-provider
+cd /path/to/claude-cli-provider
 npm install
 ```
 
-### 2. 启动服务器
+### 2. 配置环境变量
 
 ```bash
+cp .env.example .env
+# 编辑 .env 文件，设置 API_KEY（生产环境必需）
+```
+
+### 3. 启动服务器
+
+```bash
+# 开发模式
+npm run dev
+
+# 生产模式
 npm start
 ```
 
 输出：
 ```
-✅ Claude CLI Provider Server running
-   URL: http://127.0.0.1:3912
-   Health: http://127.0.0.1:3912/health
-   Using: claude
+[INFO] ✅ Claude CLI Provider Server running
+[INFO]    URL: http://0.0.0.0:3912
+[INFO]    Health: http://0.0.0.0:3912/health
+[INFO]    Environment: development
+[INFO]    Using: claude
+[INFO]    API Authentication: enabled
 ```
 
-### 3. 测试
+### 4. 测试 API
 
 ```bash
 # 健康检查
-curl http://127.0.0.1:3912/health
+curl http://localhost:3912/health
 
-# 聊天测试
-bash test.sh
-```
+# 聊天测试（流式输出）
+curl -X POST http://localhost:3912/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{"model":"sonnet","messages":[{"role":"user","content":"你好！"}]}'
 
-### 4. 配置 OpenClaw
-
-编辑 `~/.openclaw/openclaw.json`，添加：
-
-```json5
-{
-  "models": {
-    "providers": {
-      "claude-cli": {
-        "baseUrl": "http://127.0.0.1:3912/v1",
-        "api": "openai-completions",
-        "apiKey": "dummy",
-        "models": [
-          {
-            "id": "sonnet",
-            "name": "Claude Sonnet (CLI)",
-            "contextWindow": 200000,
-            "maxTokens": 8192
-          }
-        ]
-      }
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": { "primary": "claude-cli/sonnet" }
-    }
-  }
-}
-```
-
-### 5. 在 OpenClaw 中使用
-
-```bash
-# 设置为默认模型
-openclaw models set claude-cli/sonnet
-
-# 测试发送消息
-openclaw message send --channel telegram "Hello via Claude CLI!"
+# 查看可用模型
+curl http://localhost:3912/v1/models \
+  -H "Authorization: Bearer your-api-key"
 ```
 
 ## 项目结构
 
 ```
 claude-cli-provider/
-├── server.js      # HTTP 服务器核心
-├── package.json   # 依赖配置
-├── DESIGN.md      # 设计文档
-├── README.md      # 本文档
-└── test.sh        # 测试脚本
+├── server.js              # HTTP 服务器核心
+├── package.json           # 依赖配置
+├── .env.example           # 环境变量示例
+├── Dockerfile             # Docker 镜像定义
+├── docker-compose.yml     # Docker Compose 配置
+├── ecosystem.config.cjs   # PM2 配置
+├── nginx.conf.example     # Nginx 反向代理示例
+├── DEPLOYMENT.md          # 部署指南
+└── README.md              # 本文档
 ```
 
 ## API 端点
 
 ### POST /v1/chat/completions
 
-OpenAI 兼容的聊天完成接口。
+OpenAI 兼容的聊天完成接口，默认使用流式输出。
 
-**请求：**
+**请求示例：**
 ```json
 {
   "model": "sonnet",
   "messages": [
-    { "role": "user", "content": "Hello!" }
-  ]
+    { "role": "user", "content": "你好！请介绍一下自己。" }
+  ],
+  "stream": true
 }
 ```
 
-**响应：**
+**参数说明：**
+- `model` (string, 必需) - 模型名称：`sonnet` | `opus` | `haiku`
+- `messages` (array, 必需) - 对话消息数组
+- `stream` (boolean, 可选) - 是否使用流式输出，默认 `true`
+
+**流式响应示例：**
+```
+data: {"id":"chatcmpl-xxx","object":"chat.completion.chunk",...}
+data: [DONE]
+```
+
+**非流式响应示例：**
 ```json
 {
-  "id": "chatcmpl-123",
+  "id": "chatcmpl-xxx",
   "object": "chat.completion",
   "created": 1234567890,
   "model": "claude-sonnet",
@@ -114,29 +118,30 @@ OpenAI 兼容的聊天完成接口。
     "index": 0,
     "message": {
       "role": "assistant",
-      "content": "Hello! How can I help you today?"
+      "content": "你好！我是 Claude，由 Anthropic 创建的 AI 助手。"
     },
     "finish_reason": "stop"
   }],
   "usage": {
     "prompt_tokens": 10,
-    "completion_tokens": 9,
-    "total_tokens": 19
+    "completion_tokens": 20,
+    "total_tokens": 30
   }
 }
 ```
 
 ### GET /health
 
-健康检查端点。
+健康检查端点，无需认证。
 
-**响应：**
+**响应示例：**
 ```json
 {
   "status": "ok",
   "service": "claude-cli-provider",
-  "version": "1.0.0-mvp",
-  "claude_bin": "claude"
+  "version": "1.0.0",
+  "claude_bin": "claude",
+  "auth_enabled": true
 }
 ```
 
@@ -144,7 +149,7 @@ OpenAI 兼容的聊天完成接口。
 
 列出可用模型。
 
-**响应：**
+**响应示例：**
 ```json
 {
   "object": "list",
@@ -156,52 +161,166 @@ OpenAI 兼容的聊天完成接口。
 }
 ```
 
+## 环境变量配置
+
+| 变量 | 说明 | 默认值 | 生产环境建议 |
+|------|------|--------|-------------|
+| `PORT` | 服务监听端口 | `3912` | `3912` |
+| `HOST` | 绑定地址 | `0.0.0.0` | `0.0.0.0` |
+| `CLAUDE_BIN` | Claude CLI 路径 | `claude` | `claude` |
+| `API_KEY` | API 认证密钥 | 空 | **必须设置强密钥** |
+| `LOG_LEVEL` | 日志级别 | `info` | `info` |
+| `NODE_ENV` | 运行环境 | `development` | `production` |
+
+### 生成安全的 API Key
+
+```bash
+# 使用 OpenSSL
+openssl rand -hex 32
+
+# 或使用 Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+## 部署
+
+### PM2 部署
+
+```bash
+# 启动
+npm run pm2:start
+
+# 查看状态
+npm run pm2:monit
+
+# 查看日志
+npm run pm2:logs
+
+# 重启
+npm run pm2:restart
+
+# 停止
+npm run pm2:stop
+```
+
+### Docker 部署
+
+```bash
+# 构建镜像
+npm run docker:build
+
+# 启动容器
+API_KEY="your-secret-key" npm run docker:up
+
+# 查看日志
+npm run docker:logs
+
+# 停止容器
+npm run docker:down
+```
+
+详细部署指南请参考 [DEPLOYMENT.md](DEPLOYMENT.md)。
+
 ## 支持的模型
 
-- `sonnet` - Claude Sonnet 4.5（默认）
-- `opus` - Claude Opus 4.5
-- `haiku` - Claude Haiku 4
+- **sonnet** - Claude Sonnet 4.5（推荐，平衡性能和速度）
+- **opus** - Claude Opus 4.5（最强性能）
+- **haiku** - Claude Haiku 4（最快速度）
 
-## 注意事项
+## 技术实现
 
-1. **本地运行**：服务器仅绑定 `127.0.0.1`，不接受外部请求
-2. **会话**：当前版本不支持多轮对话上下文
-3. **工具**：已禁用 claude CLI 的工具调用功能
-4. **性能**：每次请求都会启动新的 claude CLI 进程
+### 真流式输出
+
+使用 Claude CLI 的原生流式功能：
+
+```bash
+claude -p \
+  --output-format stream-json \
+  --include-partial-messages \
+  --verbose
+```
+
+实时处理并转发每个数据块，而非等待完整响应后分块发送。
+
+### API 认证
+
+支持两种认证方式：
+
+1. **Authorization Header**：
+   ```
+   Authorization: Bearer your-api-key
+   ```
+
+2. **X-API-Key Header**：
+   ```
+   X-API-Key: your-api-key
+   ```
+
+开发环境（未设置 `API_KEY`）会跳过认证。
 
 ## 故障排查
 
 ### claude: command not found
 
-确保 claude CLI 已全局安装：
+确保 Claude CLI 已全局安装：
 
 ```bash
 which claude
-# 应该输出: /usr/local/bin/claude 或类似路径
+npm install -g @anthropic-ai/claude-code
 ```
 
 ### Port 3912 already in use
 
-修改端口：
+修改端口或停止占用进程：
 
 ```bash
-PORT=3913 node server.js
+# 查找占用进程
+lsof -i :3912
+
+# 或修改端口
+PORT=3913 npm start
 ```
 
-### OpenClaw 无法连接
+### API 返回 401 错误
 
-1. 检查服务器是否运行：`curl http://127.0.0.1:3912/health`
-2. 检查 OpenClaw 配置中的 baseUrl 是否正确
-3. 查看 OpenClaw 日志：`tail -f ~/.openclaw/logs/gateway.log`
+检查 API Key 配置：
 
-## 后续优化
+```bash
+# 确认 API_KEY 已设置
+echo $API_KEY
 
-- [ ] 支持流式输出（SSE）
-- [ ] 支持多轮对话（会话管理）
-- [ ] 进程池复用（性能优化）
-- [ ] 支持图片输入
-- [ ] Docker 部署
-- [ ] 系统服务（launchd/systemd）
+# 测试请求
+curl -X POST http://localhost:3912/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"sonnet","messages":[{"role":"user","content":"test"}]}'
+```
+
+### Docker 容器启动失败
+
+```bash
+# 查看日志
+docker-compose logs
+
+# 重新构建
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+## 安全建议
+
+1. **生产环境必须设置 API_KEY** - 保护 API 访问
+2. **使用 HTTPS** - 通过 Nginx 配置 SSL
+3. **限制访问来源** - 配置防火墙规则
+4. **定期更新依赖** - 保持安全性
+5. **日志脱敏** - 避免记录敏感内容
+
+## 注意事项
+
+1. **会话管理** - 当前版本不支持多轮对话上下文
+2. **工具调用** - 已禁用 Claude CLI 的工具功能
+3. **性能** - 每次请求启动新的 Claude CLI 进程
 
 ## License
 
