@@ -1,10 +1,11 @@
-version: '3.8'
-
 services:
   claude-cli-provider:
     build: .
+    image: claude-cli-provider
     container_name: claude-cli-provider
     restart: unless-stopped
+    user: "1001:1001"
+    working_dir: /home/nodejs
     ports:
       - "3912:3912"
     environment:
@@ -12,10 +13,17 @@ services:
       - HOST=0.0.0.0
       - API_KEY=${API_KEY}
       - LOG_LEVEL=info
+      - HOME=/home/nodejs
+      # Claude API 配置（从本地 settings.json 读取）
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - API_TIMEOUT_MS=${API_TIMEOUT_MS:-3000000}
     volumes:
-      - ./logs:/app/logs
+      - ./logs:/home/nodejs/logs
+      # 挂载 Claude 配置目录
+      - ${HOME}/.claude:/home/nodejs/.claude:rw
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3912/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3912/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
       timeout: 10s
       retries: 3

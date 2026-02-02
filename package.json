@@ -1,7 +1,7 @@
 {
   "name": "claude-cli-provider",
   "version": "1.0.0",
-  "description": "HTTP wrapper for claude CLI - OpenClaw Provider",
+  "description": "OpenAI-compatible HTTP API wrapper for Claude CLI with streaming support",
   "type": "module",
   "main": "server.js",
   "scripts": {

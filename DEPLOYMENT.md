@@ -23,7 +23,7 @@
 
 - **Node.js**: >= 18.0.0
 - **npm**: >= 8.0.0
-- **Claude CLI**: 已全局安装
+- **Claude CLI**: 已全局安装 `@anthropic-ai/claude-code`
 
 ### PM2 部署额外要求
 
@@ -52,7 +52,7 @@ cp .env.example .env
 |------|------|--------|-------------|
 | `PORT` | 服务监听端口 | `3912` | `3912` |
 | `HOST` | 绑定地址 | `0.0.0.0` | `0.0.0.0` |
-| `CLAUDE_BIN` | Claude CLI 可执行文件路径 | `claude` | `claude` |
+| `CLAUDE_BIN` | Claude CLI 路径 | `claude` | `claude` |
 | `API_KEY` | API 认证密钥 | 空 | **必须设置强密钥** |
 | `LOG_LEVEL` | 日志级别 | `info` | `info` |
 | `NODE_ENV` | 运行环境 | `development` | `production` |
@@ -95,7 +95,7 @@ export NODE_ENV=production
 npm run pm2:start
 
 # 或直接使用 PM2
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.cjs --env production
 ```
 
 ### 常用 PM2 命令
@@ -257,6 +257,22 @@ curl http://localhost:3912/health
 }
 ```
 
+### 测试流式输出
+
+```bash
+# 流式输出测试
+curl -X POST http://localhost:3912/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{"model":"sonnet","messages":[{"role":"user","content":"测试流式输出"}],"stream":true}'
+
+# 非流式输出测试
+curl -X POST http://localhost:3912/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-api-key" \
+  -d '{"model":"sonnet","messages":[{"role":"user","content":"测试非流式输出"}],"stream":false}'
+```
+
 ### 使用 systemd 监控（可选）
 
 创建 `/etc/systemd/system/claude-cli-provider.service`：
@@ -378,6 +394,24 @@ curl -X POST http://localhost:3912/v1/chat/completions \
   -d '{"model":"sonnet","messages":[{"role":"user","content":"test"}]}'
 ```
 
+### 流式输出不工作
+
+**检查日志**：
+
+```bash
+# PM2
+pm2 logs claude-cli-provider
+
+# Docker
+docker-compose logs
+```
+
+**测试 Claude CLI 流式功能**：
+
+```bash
+echo "测试" | claude -p --output-format stream-json --verbose
+```
+
 ### Docker 容器无法访问
 
 **检查容器状态**：
@@ -409,7 +443,7 @@ pm2 logs claude-cli-provider --err
 pm2 show claude-cli-provider
 ```
 
-**调整重启限制**（修改 `ecosystem.config.js`）：
+**调整重启限制**（修改 `ecosystem.config.cjs`）：
 
 ```javascript
 max_restarts: 20,  // 增加重启次数
@@ -432,6 +466,8 @@ min_uptime: '30s', // 增加最小运行时间
 - [ ] 已配置日志轮转
 - [ ] 已设置监控告警
 - [ ] 已测试优雅关闭（`kill -SIGTERM <pid>`）
+- [ ] 已测试流式和非流式输出
+- [ ] 已验证健康检查端点
 
 ---
 
@@ -443,6 +479,48 @@ min_uptime: '30s', // 增加最小运行时间
 4. **日志脱敏** - 避免记录敏感内容
 5. **防火墙配置** - 限制访问来源
 6. **定期更新** - 保持依赖和系统更新
+7. **速率限制** - 考虑添加速率限制中间件
+8. **CORS 控制** - 根据需要配置 CORS
+
+---
+
+## 性能优化
+
+### PM2 集群模式
+
+如果需要利用多核 CPU，可以修改 `ecosystem.config.cjs`：
+
+```javascript
+module.exports = {
+  apps: [{
+    name: 'claude-cli-provider',
+    script: './server.js',
+    instances: 'max',  // 使用所有 CPU 核心
+    exec_mode: 'cluster',  // 集群模式
+    // ... 其他配置
+  }]
+};
+```
+
+**注意**：由于每次请求都启动新的 Claude CLI 进程，集群模式可能会增加资源消耗。
+
+### Docker 资源限制
+
+在 `docker-compose.yml` 中添加资源限制：
+
+```yaml
+services:
+  claude-cli-provider:
+    # ... 其他配置
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+```
 
 ---
 

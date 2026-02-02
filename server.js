@@ -42,21 +42,26 @@ app.use((req, res, next) => {
 
 /**
  * 解析 claude CLI 的 JSON 输出
- * 输出可能是 JSON 数组字符串或换行分隔的 JSON 对象
+ * 输出可能是 JSON 数组字符串、换行分隔的 JSON 对象，或包含 result 字段的单一对象
  */
 function parseClaudeOutput(raw) {
   const trimmed = raw.trim();
 
-  // 尝试直接解析为 JSON 数组
+  // 尝试直接解析为 JSON
   try {
     const parsed = JSON.parse(trimmed);
-    // 如果是嵌套数组，展平它
+
+    // 如果是数组，处理数组格式
     if (Array.isArray(parsed)) {
-      // 检查是否是嵌套数组 [[...]]
+      // 如果是嵌套数组，展平它
       if (parsed.length === 1 && Array.isArray(parsed[0])) {
         return parsed[0];
       }
       return parsed;
+    }
+    // 如果是包含 result 字段的单一对象，转换为事件数组
+    else if (typeof parsed === 'object' && parsed !== null) {
+      return [parsed];
     }
   } catch (e) {
     // 不是单一 JSON 对象，尝试按行解析
@@ -115,6 +120,11 @@ function authenticateApiKey(req, res, next) {
  */
 function extractAssistantReply(events) {
   for (const event of events) {
+    // 支持新的响应格式：直接返回包含 result 字段的对象
+    if (event.type === 'result' && event.subtype === 'success' && event.result) {
+      return event.result;
+    }
+    // 保持对旧格式的支持
     if (event.type === 'assistant' && event.message?.content) {
       const textBlocks = event.message.content.filter(c => c.type === 'text');
       if (textBlocks.length > 0) {
@@ -131,7 +141,7 @@ function extractAssistantReply(events) {
  */
 app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
   try {
-    const { messages, model = 'sonnet', stream = false } = req.body;
+    const { messages, model = 'sonnet', stream = true } = req.body;
 
     logger.info(`Request received: model=${model}, messages=${messages?.length}, stream=${stream}`);
 
@@ -165,7 +175,9 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
     // 构建 claude CLI 命令
     const args = [
       '-p',                           // print mode（非交互）
-      '--output-format', 'json',      // JSON 输出格式
+      '--output-format', stream ? 'stream-json' : 'json', // 流式或非流式 JSON 输出
+      '--verbose',                    // stream-json 需要 verbose
+      ...(stream ? ['--include-partial-messages'] : []), // 流式时包含部分消息块
       '--no-session-persistence',     // 不保存会话
       '--model', model,               // 模型选择
       '--tools', '',                  // 禁用工具
@@ -176,12 +188,7 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
 
     // 执行 claude CLI
     const child = spawn(config.CLAUDE_BIN, args);
-    let stdout = '';
     let stderr = '';
-
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
 
     child.stderr.on('data', (data) => {
       stderr += data.toString();
@@ -190,39 +197,6 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
     // 发送用户输入
     child.stdin.write(prompt);
     child.stdin.end();
-
-    // 等待命令完成
-    const exitCode = await new Promise((resolve) => {
-      child.on('close', resolve);
-    });
-
-    const duration = Date.now() - startTime;
-    logger.info(`Claude CLI completed in ${duration}ms, exit=${exitCode}`);
-
-    if (exitCode !== 0) {
-      logger.error(`Claude CLI stderr: ${stderr}`);
-      return res.status(500).json({
-        error: {
-          message: `Claude CLI failed with exit code ${exitCode}`,
-          type: 'claude_cli_error'
-        }
-      });
-    }
-
-    // 解析输出
-    const events = parseClaudeOutput(stdout);
-    const reply = extractAssistantReply(events);
-
-    if (!reply) {
-      logger.error(`No reply found in ${events.length} events`);
-      return res.status(500).json({
-        error: {
-          message: 'Failed to extract reply from claude CLI',
-          type: 'parse_error',
-          events: events.slice(0, 3) // 调试信息
-        }
-      });
-    }
 
     // 流式响应
     if (stream) {
@@ -246,21 +220,73 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
         }]
       });
 
-      // 分块发送内容
-      const chunkSize = 20; // 每次发送的字符数
-      for (let i = 0; i < reply.length; i += chunkSize) {
-        const chunk = reply.slice(i, i + chunkSize);
+      // 实时处理 Claude CLI 的流式输出
+      let fullReply = '';
+      child.stdout.on('data', (data) => {
+        const lines = data.toString().split('\n').filter(line => line.trim());
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            logger.debug('Claude CLI event:', event);
+
+            // 提取助手回复内容
+            let content = '';
+            if (event.type === 'result' && event.subtype === 'success' && event.result) {
+              content = event.result;
+            } else if (event.type === 'assistant' && event.message?.content) {
+              const textBlocks = event.message.content.filter(c => c.type === 'text');
+              if (textBlocks.length > 0) {
+                content = textBlocks.map(b => b.text).join('\n');
+              }
+            } else if (event.type === 'partial' && event.content) {
+              // 处理部分消息块
+              content = event.content;
+            }
+
+            if (content) {
+              fullReply += content;
+              sendSSEChunk(res, {
+                id,
+                object: 'chat.completion.chunk',
+                created,
+                model: `claude-${model}`,
+                choices: [{
+                  index: 0,
+                  delta: { content: content },
+                  finish_reason: null
+                }]
+              });
+            }
+          } catch (e) {
+            logger.debug('Failed to parse line:', line.substring(0, 100));
+          }
+        }
+      });
+
+      // 等待命令完成
+      const exitCode = await new Promise((resolve) => {
+        child.on('close', resolve);
+      });
+
+      const duration = Date.now() - startTime;
+      logger.info(`Claude CLI completed in ${duration}ms, exit=${exitCode}`);
+
+      if (exitCode !== 0) {
+        logger.error(`Claude CLI stderr: ${stderr}`);
         sendSSEChunk(res, {
           id,
           object: 'chat.completion.chunk',
           created,
           model: `claude-${model}`,
-          choices: [{
-            index: 0,
-            delta: { content: chunk },
-            finish_reason: null
-          }]
+          choices: [],
+          error: {
+            message: `Claude CLI failed with exit code ${exitCode}`,
+            type: 'claude_cli_error'
+          }
         });
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
       }
 
       // 发送完成 chunk
@@ -278,7 +304,7 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
 
       // 发送 usage
       const promptTokens = Math.ceil(prompt.length / 4);
-      const completionTokens = Math.ceil(reply.length / 4);
+      const completionTokens = Math.ceil(fullReply.length / 4);
       sendSSEChunk(res, {
         id,
         object: 'chat.completion.chunk',
@@ -296,6 +322,45 @@ app.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
       res.end();
     } else {
       // 非流式响应
+      let stdout = '';
+      child.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      // 等待命令完成
+      const exitCode = await new Promise((resolve) => {
+        child.on('close', resolve);
+      });
+
+      const duration = Date.now() - startTime;
+      logger.info(`Claude CLI completed in ${duration}ms, exit=${exitCode}`);
+
+      if (exitCode !== 0) {
+        logger.error(`Claude CLI stderr: ${stderr}`);
+        return res.status(500).json({
+          error: {
+            message: `Claude CLI failed with exit code ${exitCode}`,
+            type: 'claude_cli_error'
+          }
+        });
+      }
+
+      // 解析输出
+      const events = parseClaudeOutput(stdout);
+      const reply = extractAssistantReply(events);
+
+      if (!reply) {
+        logger.error(`No reply found in ${events.length} events. Raw output: ${stdout}`);
+        return res.status(500).json({
+          error: {
+            message: 'Failed to extract reply from claude CLI',
+            type: 'parse_error',
+            events: events.slice(0, 3),
+            raw_output: stdout.slice(0, 500) // 调试信息（限制长度）
+          }
+        });
+      }
+
       res.json({
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion',
