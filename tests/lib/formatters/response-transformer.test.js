@@ -140,6 +140,45 @@ describe('ResponseTransformer', () => {
     });
   });
 
+  describe('truncateContent', () => {
+    test('should return content if under limit', () => {
+      const content = 'Hello world';
+      const result = ResponseTransformer.truncateContent(content, 10);
+      expect(result).toBe(content);
+    });
+
+    test('should return content if no maxTokens provided', () => {
+      const content = 'Hello world';
+      const result = ResponseTransformer.truncateContent(content, null);
+      expect(result).toBe(content);
+    });
+
+    test('should return null if content is null', () => {
+      const result = ResponseTransformer.truncateContent(null, 10);
+      expect(result).toBeNull();
+    });
+
+    test('should truncate content exceeding limit', () => {
+      const content = 'This is a longer piece of text that needs to be truncated';
+      const result = ResponseTransformer.truncateContent(content, 5); // 5 tokens ≈ 20 chars
+      expect(result.length).toBeLessThan(content.length);
+      expect(result.length).toBeLessThanOrEqual(20);
+    });
+
+    test('should truncate at word boundary', () => {
+      const content = 'Hello world this is a test';
+      const result = ResponseTransformer.truncateContent(content, 3); // 3 tokens ≈ 12 chars
+      // Should truncate at space if possible
+      expect(result.length).toBeLessThanOrEqual(12);
+    });
+
+    test('should handle exact token limit', () => {
+      const content = 'Hello world test';
+      const result = ResponseTransformer.truncateContent(content, 4); // 4 tokens ≈ 16 chars
+      expect(result.length).toBeLessThanOrEqual(16);
+    });
+  });
+
   describe('estimateTokens', () => {
     test('should estimate tokens for text', () => {
       const usage = ResponseTransformer.estimateTokens('Hello world');
