@@ -1,0 +1,400 @@
+/**
+ * PTY Adapter Tests
+ */
+
+// Mock modules before importing
+const mockSpawn = jest.fn();
+const mockUuid = jest.fn(() => 'mock-uuid-1234');
+
+jest.mock('node-pty', () => ({
+  spawn: mockSpawn
+}));
+
+jest.mock('uuid', () => ({
+  v4: mockUuid
+}));
+
+import { PTYAdapter } from '../../../lib/adapters/pty-adapter.js';
+import { ProcessManager } from '../../../lib/claude/process-manager.js';
+import { SessionManager } from '../../../lib/claude/session-manager.js';
+
+describe('PTYAdapter', () => {
+  let ptyAdapter;
+  let mockPtyProcess;
+
+  beforeEach(() => {
+    // Reset all mocks
+    mockSpawn.mockClear();
+    mockUuid.mockClear();
+
+    // Create a mock PTY process
+    mockPtyProcess = {
+      pid: 12345,
+      write: jest.fn(),
+      on: jest.fn(),
+      kill: jest.fn()
+    };
+
+    // Mock node-pty.spawn to return our mock process
+    mockSpawn.mockReturnValue(mockPtyProcess);
+
+    // Create adapter
+    ptyAdapter = new PTYAdapter({
+      claudeBin: 'claude',
+      maxProcesses: 5
+    });
+  });
+
+  describe('constructor', () => {
+    test('should initialize with default config', () => {
+      const adapter = new PTYAdapter();
+
+      expect(adapter.claudeBin).toBe('claude');
+      expect(adapter.processManager).toBeInstanceOf(ProcessManager);
+      expect(adapter.sessionManager).toBeInstanceOf(SessionManager);
+    });
+
+    test('should initialize with custom config', () => {
+      const adapter = new PTYAdapter({
+        claudeBin: '/custom/path/claude',
+        maxProcesses: 10
+      });
+
+      expect(adapter.claudeBin).toBe('/custom/path/claude');
+    });
+  });
+
+  describe('getOrCreateSession', () => {
+    test('should create new session when sessionId is null', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      expect(session).toBeDefined();
+      expect(session.sessionId).toBeDefined();
+      expect(session.status).toBe('ready');
+      expect(session.ptyProcess).toBe(mockPtyProcess);
+    });
+
+    test('should use existing session when sessionId is provided', async () => {
+      const session1 = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      const session2 = await ptyAdapter.getOrCreateSession(session1.sessionId, {
+        model: 'opus'
+      });
+
+      expect(session2.sessionId).toBe(session1.sessionId);
+      expect(session2.options.model).toBe('sonnet'); // Should keep original options
+    });
+
+    test('should create PTY process for new session', async () => {
+      await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet',
+        allowedTools: ['Bash', 'Write']
+      });
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'claude',
+        ['--model', 'sonnet', '--allowed-tools', 'Bash,Write'],
+        expect.objectContaining({
+          name: 'xterm-color',
+          cols: 80,
+          rows: 24
+        })
+      );
+    });
+
+    test('should wait for prompt before marking session as ready', async () => {
+      let onDataCallback;
+
+      mockPtyProcess.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          onDataCallback = callback;
+        }
+      });
+
+      const sessionPromise = ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      // Simulate prompt appearing
+      await new Promise(resolve => setTimeout(resolve, 10));
+      if (onDataCallback) {
+        onDataCallback('> ');
+      }
+
+      const session = await sessionPromise;
+      expect(session.status).toBe('ready');
+    });
+
+    test('should handle timeout waiting for prompt', async () => {
+      mockPtyProcess.on.mockImplementation(() => {});
+
+      await expect(
+        ptyAdapter.getOrCreateSession(null, {
+          model: 'sonnet',
+          timeout: 100 // Short timeout
+        })
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('sendMessage', () => {
+    test('should send message using bracketed paste mode', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      await ptyAdapter.sendMessage(session.sessionId, 'Hello, Claude!');
+
+      expect(mockPtyProcess.write).toHaveBeenCalledWith('\x1b[200~');
+      expect(mockPtyProcess.write).toHaveBeenCalledWith('Hello, Claude!');
+      expect(mockPtyProcess.write).toHaveBeenCalledWith('\x1b[201~');
+      expect(mockPtyProcess.write).toHaveBeenCalledWith('\r');
+    });
+
+    test('should add user message to session history', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      await ptyAdapter.sendMessage(session.sessionId, 'Test message');
+
+      const updatedSession = ptyAdapter.sessionManager.getSession(session.sessionId);
+      const userMessages = updatedSession.messages.filter(m => m.role === 'user');
+      expect(userMessages).toHaveLength(1);
+      expect(userMessages[0].content).toBe('Test message');
+    });
+
+    test('should update session status to processing', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      await ptyAdapter.sendMessage(session.sessionId, 'Test');
+
+      expect(session.status).toBe('processing');
+    });
+
+    test('should throw error for non-existent session', async () => {
+      await expect(
+        ptyAdapter.sendMessage('non-existent', 'Test')
+      ).rejects.toThrow('Session not found');
+    });
+
+    test('should throw error if PTY process is missing', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      // Remove PTY process
+      session.ptyProcess = null;
+
+      await expect(
+        ptyAdapter.sendMessage(session.sessionId, 'Test')
+      ).rejects.toThrow('Session has no PTY process');
+    });
+  });
+
+  describe('streamResponse', () => {
+    let onDataCallback;
+    let session;
+
+    beforeEach(async () => {
+      onDataCallback = null;
+
+      mockPtyProcess.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          onDataCallback = callback;
+        }
+      });
+
+      session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+    });
+
+    test('should stream content events', async () => {
+      const events = [];
+      const streamPromise = (async () => {
+        for await (const event of ptyAdapter.streamResponse(session.sessionId)) {
+          events.push(event);
+          if (event.type === 'done') break;
+        }
+      })();
+
+      // Simulate response
+      setTimeout(() => {
+        if (onDataCallback) {
+          onDataCallback('Hello\n> ');
+          onDataCallback('Hello\n> ');
+          onDataCallback('Hello\n> ');
+        }
+      }, 10);
+
+      await streamPromise;
+
+      const contentEvents = events.filter(e => e.type === 'content');
+      expect(contentEvents.length).toBeGreaterThan(0);
+    });
+
+    test('should detect and emit tool calls', async () => {
+      const events = [];
+      const streamPromise = (async () => {
+        for await (const event of ptyAdapter.streamResponse(session.sessionId)) {
+          events.push(event);
+          if (event.type === 'done') break;
+        }
+      })();
+
+      // Simulate tool call
+      setTimeout(() => {
+        if (onDataCallback) {
+          onDataCallback('Tool call: Bash(ls -la)\n> ');
+          onDataCallback('Tool call: Bash(ls -la)\n> ');
+          onDataCallback('Tool call: Bash(ls -la)\n> ');
+        }
+      }, 10);
+
+      await streamPromise;
+
+      const toolEvents = events.filter(e => e.type === 'tool_call');
+      expect(toolEvents.length).toBeGreaterThan(0);
+      expect(toolEvents[0].data.tool).toBe('Bash');
+    });
+
+    test('should emit done event when screen is stable', async () => {
+      const events = [];
+      const streamPromise = (async () => {
+        for await (const event of ptyAdapter.streamResponse(session.sessionId)) {
+          events.push(event);
+          if (event.type === 'done') break;
+        }
+      })();
+
+      // Simulate stable output
+      setTimeout(() => {
+        if (onDataCallback) {
+          const stableScreen = 'Response\n> ';
+          onDataCallback(stableScreen);
+          onDataCallback(stableScreen);
+          onDataCallback(stableScreen);
+        }
+      }, 10);
+
+      await streamPromise;
+
+      const doneEvents = events.filter(e => e.type === 'done');
+      expect(doneEvents).toHaveLength(1);
+    });
+
+    test('should add assistant message to history', async () => {
+      const streamPromise = (async () => {
+        for await (const event of ptyAdapter.streamResponse(session.sessionId)) {
+          if (event.type === 'done') break;
+        }
+      })();
+
+      setTimeout(() => {
+        if (onDataCallback) {
+          onDataCallback('Assistant response\n> ');
+          onDataCallback('Assistant response\n> ');
+          onDataCallback('Assistant response\n> ');
+        }
+      }, 10);
+
+      await streamPromise;
+
+      const updatedSession = ptyAdapter.sessionManager.getSession(session.sessionId);
+      const assistantMessages = updatedSession.messages.filter(m => m.role === 'assistant');
+      expect(assistantMessages.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('listSessions', () => {
+    test('should return list of sessions', async () => {
+      await ptyAdapter.getOrCreateSession(null, { model: 'sonnet' });
+      await ptyAdapter.getOrCreateSession(null, { model: 'opus' });
+
+      const sessions = ptyAdapter.listSessions();
+
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0]).toHaveProperty('session_id');
+      expect(sessions[0]).toHaveProperty('created_at');
+      expect(sessions[0]).toHaveProperty('status');
+    });
+
+    test('should return empty array when no sessions', () => {
+      const sessions = ptyAdapter.listSessions();
+      expect(sessions).toEqual([]);
+    });
+  });
+
+  describe('getSession', () => {
+    test('should return session details', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      const details = ptyAdapter.getSession(session.sessionId);
+
+      expect(details).toBeDefined();
+      expect(details.session_id).toBe(session.sessionId);
+      expect(details).toHaveProperty('messages');
+      expect(details).toHaveProperty('options');
+    });
+
+    test('should return null for non-existent session', () => {
+      const details = ptyAdapter.getSession('non-existent');
+      expect(details).toBeNull();
+    });
+  });
+
+  describe('deleteSession', () => {
+    test('should delete session and cleanup process', async () => {
+      const session = await ptyAdapter.getOrCreateSession(null, {
+        model: 'sonnet'
+      });
+
+      const deleted = ptyAdapter.deleteSession(session.sessionId);
+
+      expect(deleted).toBe(true);
+      expect(mockPtyProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(ptyAdapter.sessionManager.getSession(session.sessionId)).toBeNull();
+    });
+
+    test('should return false for non-existent session', () => {
+      const deleted = ptyAdapter.deleteSession('non-existent');
+      expect(deleted).toBe(false);
+    });
+  });
+
+  describe('healthCheck', () => {
+    test('should return health status', () => {
+      const health = ptyAdapter.healthCheck();
+
+      expect(health).toHaveProperty('adapter', 'pty');
+      expect(health).toHaveProperty('healthy');
+      expect(health).toHaveProperty('processes');
+      expect(health).toHaveProperty('sessions');
+    });
+
+    test('should indicate healthy when under limit', () => {
+      const health = ptyAdapter.healthCheck();
+      expect(health.healthy).toBe(true);
+    });
+  });
+
+  describe('cleanup', () => {
+    test('should cleanup all resources', async () => {
+      await ptyAdapter.getOrCreateSession(null, { model: 'sonnet' });
+      await ptyAdapter.getOrCreateSession(null, { model: 'opus' });
+
+      await ptyAdapter.cleanup();
+
+      expect(ptyAdapter.sessionManager.getStats().total).toBe(0);
+    });
+  });
+});

@@ -1,11 +1,21 @@
 # Claude CLI Provider
 
-将 Claude Code CLI 包装为 OpenAI 兼容的 HTTP API，支持流式输出。
+将 Claude Code CLI 包装为 HTTP API，支持 OpenAI 兼容模式和 Agent 模式。
 
 ## 特性
 
+### OpenAI 兼容模式
 - ✅ **OpenAI 兼容 API** - 兼容 `/v1/chat/completions` 接口
 - ✅ **真流式输出** - 使用 Claude CLI 的原生流式功能
+- ✅ **简单易用** - 标准化请求格式，兼容 OpenAI SDK
+
+### Agent 模式 (新增!)
+- ✅ **完整工具调用** - 支持 Bash, Edit, Read, Write 等所有工具
+- ✅ **自动会话管理** - 多轮对话上下文自动维护
+- ✅ **实时事件流** - SSE (Server-Sent Events) 流式响应
+- ✅ **工具调用检测** - 自动检测和报告工具调用
+
+### 通用特性
 - ✅ **API Key 认证** - 生产环境安全保护
 - ✅ **多部署方式** - 支持 Docker 和 PM2 部署
 - ✅ **环境变量配置** - 灵活的配置管理
@@ -49,6 +59,8 @@ npm start
 
 ### 4. 测试 API
 
+#### OpenAI 兼容模式 (简单问答)
+
 ```bash
 # 健康检查
 curl http://localhost:3912/health
@@ -63,6 +75,37 @@ curl -X POST http://localhost:3912/v1/chat/completions \
 curl http://localhost:3912/v1/models \
   -H "Authorization: Bearer your-api-key"
 ```
+
+#### Agent 模式 (工具调用和会话管理)
+
+```bash
+# 发送消息（支持工具调用）
+curl -X POST http://localhost:3912/v1/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "创建一个 test.txt 文件",
+    "options": {
+      "model": "sonnet",
+      "allowedTools": ["Bash", "Write", "Read"]
+    }
+  }'
+
+# 列出所有会话
+curl http://localhost:3912/v1/agent/sessions
+
+# 获取会话详情
+curl http://localhost:3912/v1/agent/sessions/<session-id>
+
+# 删除会话
+curl -X DELETE http://localhost:3912/v1/agent/sessions/<session-id>
+
+# Agent 模式健康检查
+curl http://localhost:3912/v1/agent/health
+```
+
+**详细文档:**
+- [Agent 模式使用指南](./docs/agent-mode-guide.md) - Agent 模式完整文档
+- [混合模式设计文档](./docs/design/hybrid-mode-design.md) - 架构设计说明
 
 ## 项目结构
 

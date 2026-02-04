@@ -23,6 +23,7 @@
 import express from 'express';
 import { logger } from './lib/utils/index.js';
 import openaiRoutes from './routes/openai.js';
+import agentRoutes, { cleanup as cleanupAgentRoutes } from './routes/agent.js';
 
 // ============ Configuration ============
 const config = {
@@ -66,6 +67,11 @@ app.get('/health', (req, res) => {
  * OpenAI-compatible routes
  */
 app.use('/v1', openaiRoutes);
+
+/**
+ * Agent mode routes
+ */
+app.use('/v1/agent', agentRoutes);
 
 /**
  * 404 handler
@@ -117,8 +123,17 @@ const server = app.listen(config.PORT, config.HOST, () => {
  * Graceful shutdown handler
  * @param {string} signal - Signal name
  */
-const gracefulShutdown = (signal) => {
+const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received, shutting down gracefully...`);
+
+  // Cleanup agent routes
+  try {
+    await cleanupAgentRoutes();
+  } catch (error) {
+    logger.error('Error during agent routes cleanup', {
+      error: error.message
+    });
+  }
 
   server.close(() => {
     logger.info('Server closed');
