@@ -75,9 +75,19 @@ claude-cli-provider/
 ├── docker-compose.yml     # Docker Compose 配置
 ├── ecosystem.config.cjs   # PM2 配置
 ├── nginx.conf.example     # Nginx 反向代理示例
-├── DEPLOYMENT.md          # 部署指南
+├── docs/                  # 项目文档
+│   ├── README.md          # 文档导航和索引
+│   ├── guides/            # 使用指南（部署指南等）
+│   ├── architecture/      # 架构文档
+│   ├── development/       # 开发文档
+│   ├── references/        # 技术参考
+│   ├── reports/           # 项目报告
+│   └── archive/           # 归档文档
+├── DEPLOYMENT.md          # 部署指南（已迁移到 docs/guides/）
 └── README.md              # 本文档
 ```
+
+> 📖 **完整文档**: 查看 [docs/README.md](docs/README.md) 获取完整的项目文档索引。
 
 ## API 端点
 
@@ -219,7 +229,7 @@ npm run docker:logs
 npm run docker:down
 ```
 
-详细部署指南请参考 [DEPLOYMENT.md](DEPLOYMENT.md)。
+详细部署指南请参考 [docs/guides/deployment-guide.md](docs/guides/deployment-guide.md)。
 
 ## 支持的模型
 
