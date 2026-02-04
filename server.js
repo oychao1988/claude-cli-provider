@@ -21,7 +21,7 @@
  */
 
 import express from 'express';
-import { logger } from './lib/utils/index.js';
+import { logger, metrics } from './lib/utils/index.js';
 import openaiRoutes from './routes/openai.js';
 import agentRoutes, { cleanup as cleanupAgentRoutes } from './routes/agent.js';
 
@@ -61,6 +61,28 @@ app.get('/health', (req, res) => {
     auth_enabled: !!config.API_KEY,
     environment: config.NODE_ENV
   });
+});
+
+/**
+ * Metrics endpoint (no authentication required in development)
+ */
+app.get('/metrics', (req, res) => {
+  // Only allow metrics in development or with API key
+  if (config.NODE_ENV === 'production' && config.API_KEY) {
+    const apiKey = req.headers['authorization']?.replace('Bearer ', '') ||
+                   req.headers['x-api-key'];
+    if (apiKey !== config.API_KEY) {
+      return res.status(401).json({
+        error: {
+          message: 'Unauthorized',
+          type: 'authentication_error'
+        }
+      });
+    }
+  }
+
+  const stats = metrics.getStats();
+  res.json(stats);
 });
 
 /**

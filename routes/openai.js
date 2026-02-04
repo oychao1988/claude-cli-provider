@@ -10,7 +10,7 @@
 
 import express from 'express';
 import { CLIAdapter } from '../lib/adapters/index.js';
-import { logger, AuthenticationError, ValidationError } from '../lib/utils/index.js';
+import { logger, AuthenticationError, ValidationError, metrics } from '../lib/utils/index.js';
 
 const router = express.Router();
 
@@ -106,10 +106,12 @@ router.post('/chat/completions', authenticateApiKey, async (req, res) => {
         res.end();
 
         const duration = Date.now() - startTime;
+        metrics.recordRequest(duration, true, '/v1/chat/completions');
         logger.info('Streaming request completed', { duration });
 
       } catch (error) {
         logger.error('Streaming error', { error: error.message });
+        metrics.recordRequest(Date.now() - startTime, false, '/v1/chat/completions');
         // Send error and close
         res.write(`data: ${JSON.stringify({
           error: {
@@ -124,6 +126,7 @@ router.post('/chat/completions', authenticateApiKey, async (req, res) => {
     } else if (result.type === 'response') {
       // Handle non-streaming response
       const duration = Date.now() - startTime;
+      metrics.recordRequest(duration, true, '/v1/chat/completions');
       logger.info('Non-streaming request completed', { duration });
 
       res.json(result.data);
@@ -131,6 +134,7 @@ router.post('/chat/completions', authenticateApiKey, async (req, res) => {
 
   } catch (error) {
     const duration = Date.now() - startTime;
+    metrics.recordRequest(duration, false, '/v1/chat/completions');
     logger.error('Chat completion error', {
       error: error.message,
       duration
