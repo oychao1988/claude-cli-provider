@@ -17,6 +17,7 @@
 | [STAGE4_COMPLETION_SUMMARY.md](STAGE4_COMPLETION_SUMMARY.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成总结报告 |
 | [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md) | ✅ 已完成 | 2026-02-05 | 测试覆盖率详细报告 |
 | [test-plan.md](test-plan.md) | ✅ 已完成 | 2026-02-05 | 综合测试计划文档 |
+| [DOCUMENTATION-REORGANIZATION-SUMMARY.md](DOCUMENTATION-REORGANIZATION-SUMMARY.md) | ✅ 已完成 | 2026-02-05 | 文档整理完成总结 |
 
 ---
 
