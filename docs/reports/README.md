@@ -12,7 +12,11 @@
 
 | 文档 | 状态 | 完成时间 | 描述 |
 |------|------|----------|------|
-| *待添加* | ❌ 待创建 | - | 里程碑报告 |
+| [final-project-summary.md](final-project-summary.md) | ✅ 已完成 | 2026-02-05 | 项目总体总结和成果展示 |
+| [stage4-completion-report.md](stage4-completion-report.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成详细报告 |
+| [STAGE4_COMPLETION_SUMMARY.md](STAGE4_COMPLETION_SUMMARY.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成总结报告 |
+| [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md) | ✅ 已完成 | 2026-02-05 | 测试覆盖率详细报告 |
+| [test-plan.md](test-plan.md) | ✅ 已完成 | 2026-02-05 | 综合测试计划文档 |
 
 ---
 
@@ -75,6 +79,7 @@
 
 - [ ] 阶段 1 完成报告 (STAGE-1-COMPLETION-REPORT.md)
 - [ ] 阶段 2 完成报告 (STAGE-2-COMPLETION-REPORT.md)
+- [ ] 阶段 3 完成报告 (STAGE-3-COMPLETION-REPORT.md)
 - [ ] 月度总结报告 (monthly-summary-2026-02.md)
 
 ---

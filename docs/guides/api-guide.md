@@ -1,6 +1,16 @@
-# API Guide
+# API 使用指南
 
-This guide explains how to use the Claude CLI Provider's OpenAI-compatible API.
+> **版本**: 1.0.0
+> **创建日期**: 2026-02-05
+> **状态**: ✅ 已实施
+> **适用对象**: 开发者、用户
+> **最后更新**: 2026-02-05
+
+---
+
+## 概述
+
+本指南介绍如何使用 Claude CLI Provider 的 OpenAI 兼容 API。
 
 ## Overview
 
