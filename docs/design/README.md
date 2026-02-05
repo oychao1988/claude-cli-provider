@@ -15,6 +15,7 @@
 | [openai-compatibility-analysis.md](openai-compatibility-analysis.md) | ✅ 已实施 | 2026-02-04 | OpenAI 兼容性分析报告 |
 | [agentapi-implementation-analysis.md](agentapi-implementation-analysis.md) | ✅ 已实施 | 2026-02-04 | Agent API 实现分析 |
 | [hybrid-mode-design.md](hybrid-mode-design.md) | ✅ 已实施 | 2026-02-04 | 混合模式架构设计 |
+| [openai-tool-calling-design.md](openai-tool-calling-design.md) | 🔄 设计中 | 待实施 | OpenAI 模式工具调用支持设计 |
 
 ---
 
