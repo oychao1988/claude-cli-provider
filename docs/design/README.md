@@ -12,7 +12,9 @@
 
 | 文档 | 状态 | 实施时间 | 描述 |
 |------|------|----------|------|
-| *待添加* | ❌ 待创建 | - | 功能设计文档 |
+| [openai-compatibility-analysis.md](openai-compatibility-analysis.md) | ✅ 已实施 | 2026-02-04 | OpenAI 兼容性分析报告 |
+| [agentapi-implementation-analysis.md](agentapi-implementation-analysis.md) | ✅ 已实施 | 2026-02-04 | Agent API 实现分析 |
+| [hybrid-mode-design.md](hybrid-mode-design.md) | ✅ 已实施 | 2026-02-04 | 混合模式架构设计 |
 
 ---
 

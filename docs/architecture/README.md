@@ -12,7 +12,8 @@
 
 | 文档 | 状态 | 描述 |
 |------|------|------|
-| *待添加* | ❌ 待创建 | 系统架构设计文档 |
+| [system-architecture.md](system-architecture.md) | ✅ 已完成 | 系统架构设计文档 |
+| [security-design.md](security-design.md) | ✅ 已完成 | 安全设计文档 |
 
 ---
 
@@ -60,16 +61,6 @@ Claude CLI Provider 由以下主要组件构成：
 | HTTP Client | curl/任何 | - | API 调用 |
 | CLI | Claude CLI | 最新 | AI 能力提供 |
 | 部署 | PM2/Docker | - | 进程管理/容器化 |
-
----
-
-## 📝 待创建文档
-
-- [ ] 系统架构设计 (system-architecture.md)
-- [ ] API 设计文档 (api-design.md)
-- [ ] 安全设计文档 (security-design.md)
-- [ ] 数据流设计 (data-flow.md)
-- [ ] 部署架构 (deployment-architecture.md)
 
 ---
 

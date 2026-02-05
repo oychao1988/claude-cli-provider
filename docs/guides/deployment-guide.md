@@ -2,8 +2,9 @@
 
 > **版本**: 1.0.0
 > **创建日期**: 2026-02-04
-> **状态**: 已完成
+> **状态**: ✅ 已完成
 > **适用对象**: 运维人员、开发者
+> **最后更新**: 2026-02-05
 
 本文档介绍如何将 claude-cli-provider 部署到生产服务器。
 
@@ -28,6 +29,11 @@
 
 - **Node.js**: >= 18.0.0
 - **npm**: >= 8.0.0
+- **Python**: >= 3.0 (node-pty 编译需要)
+- **构建工具**:
+  - Ubuntu/Debian: `build-essential`, `make`
+  - CentOS/RHEL: `gcc`, `gcc-c++`, `make`
+  - macOS: Xcode Command Line Tools
 - **Claude CLI**: 已全局安装 `@anthropic-ai/claude-code`
 
 ### PM2 部署额外要求
@@ -61,6 +67,8 @@ cp .env.example .env
 | `API_KEY` | API 认证密钥 | 空 | **必须设置强密钥** |
 | `LOG_LEVEL` | 日志级别 | `info` | `info` |
 | `NODE_ENV` | 运行环境 | `development` | `production` |
+| `MAX_PROCESSES` | OpenAI模式最大进程数 | `10` | `10-20` (根据CPU核心数调整) |
+| `MAX_PTY_PROCESSES` | Agent模式最大PTY进程数 | `5` | `5-10` (PTY进程消耗更多资源) |
 
 ### 生成安全的 API Key
 

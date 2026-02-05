@@ -46,6 +46,18 @@
 | 文档 | 状态 | 描述 |
 |------|------|------|
 | [deployment-guide.md](guides/deployment-guide.md) | ✅ 已完成 | PM2/Docker 生产部署完整指南 |
+| [api-guide.md](guides/api-guide.md) | ✅ 已完成 | API 使用指南和最佳实践 |
+| [agent-mode-guide.md](guides/agent-mode-guide.md) | ✅ 已完成 | Agent 模式使用指南和配置说明 |
+
+### [design/](design/) - 设计文档
+
+功能设计文档和实施方案。
+
+| 文档 | 状态 | 描述 |
+|------|------|------|
+| [openai-compatibility-analysis.md](design/openai-compatibility-analysis.md) | ✅ 已实施 | OpenAI 兼容性分析报告 |
+| [agentapi-implementation-analysis.md](design/agentapi-implementation-analysis.md) | ✅ 已实施 | Agent API 实现分析 |
+| [hybrid-mode-design.md](design/hybrid-mode-design.md) | ✅ 已实施 | 混合模式架构设计 |
 
 ### [architecture/](architecture/) - 架构文档
 
@@ -53,7 +65,8 @@
 
 | 文档 | 状态 | 描述 |
 |------|------|------|
-| *待添加* | ❌ 待创建 | 系统架构设计文档 |
+| [system-architecture.md](architecture/system-architecture.md) | ✅ 已完成 | 系统架构设计文档 |
+| [security-design.md](architecture/security-design.md) | ✅ 已完成 | 安全设计文档 |
 
 ### [development/](development/) - 开发相关
 
@@ -61,7 +74,7 @@
 
 | 文档 | 状态 | 描述 |
 |------|------|------|
-| *待添加* | ❌ 待创建 | 开发计划和总结 |
+| [HYBRID-MODE-IMPLEMENTATION-PLAN.md](development/HYBRID-MODE-IMPLEMENTATION-PLAN.md) | ✅ 已完成 | 混合模式实施计划 |
 
 ### [references/](references/) - 技术参考
 
@@ -75,11 +88,15 @@
 
 ### [reports/](reports/) - 项目报告
 
-里程碑完成报告。
+里程碑完成报告和项目总结。
 
 | 文档 | 状态 | 完成时间 | 描述 |
 |------|------|----------|------|
-| *待添加* | ❌ 待创建 | 里程碑报告 |
+| [final-project-summary.md](reports/final-project-summary.md) | ✅ 已完成 | 2026-02-05 | 项目总体总结和成果展示 |
+| [stage4-completion-report.md](reports/stage4-completion-report.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成详细报告 |
+| [STAGE4_COMPLETION_SUMMARY.md](reports/STAGE4_COMPLETION_SUMMARY.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成总结报告 |
+| [TEST-COVERAGE-REPORT.md](reports/TEST-COVERAGE-REPORT.md) | ✅ 已完成 | 2026-02-05 | 测试覆盖率详细报告 |
+| [test-plan.md](reports/test-plan.md) | ✅ 已完成 | 2026-02-05 | 综合测试计划文档 |
 
 ---
 

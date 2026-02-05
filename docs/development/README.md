@@ -12,7 +12,7 @@
 
 | 文档 | 状态 | 描述 |
 |------|------|------|
-| *待添加* | ❌ 待创建 | 开发计划和总结文档 |
+| [HYBRID-MODE-IMPLEMENTATION-PLAN.md](HYBRID-MODE-IMPLEMENTATION-PLAN.md) | ✅ 已完成 | 混合模式实施计划 |
 
 ---
 

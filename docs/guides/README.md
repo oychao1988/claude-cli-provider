@@ -13,6 +13,8 @@
 | 文档 | 状态 | 描述 |
 |------|------|------|
 | [deployment-guide.md](deployment-guide.md) | ✅ 已完成 | PM2/Docker 生产部署完整指南 |
+| [api-guide.md](api-guide.md) | ✅ 已完成 | API 使用指南和最佳实践 |
+| [agent-mode-guide.md](agent-mode-guide.md) | ✅ 已完成 | Agent 模式使用指南和配置说明 |
 
 ---
 
@@ -23,7 +25,8 @@
 - **环境配置**: [主 README](../README.md#环境配置) - 环境变量配置说明
 
 ### 使用相关
-- **API 使用**: [主 README](../README.md#api-端点文档) - API 端点和使用示例
+- **API 使用**: [api-guide.md](api-guide.md) - API 端点和使用示例
+- **Agent 模式**: [agent-mode-guide.md](agent-mode-guide.md) - Agent 模式配置和使用
 - **快速开始**: [项目 README](../../README.md#快速开始) - 快速入门指南
 
 ### 故障排查
@@ -34,9 +37,9 @@
 
 ## 📝 待创建文档
 
-- [ ] API 使用指南 (api-usage-guide.md)
 - [ ] 配置参考手册 (configuration-reference.md)
 - [ ] 性能优化指南 (performance-tuning.md)
+- [ ] 故障排查手册 (troubleshooting-guide.md)
 
 ---
 
