@@ -97,6 +97,7 @@
 | [STAGE4_COMPLETION_SUMMARY.md](reports/STAGE4_COMPLETION_SUMMARY.md) | ✅ 已完成 | 2026-02-05 | 阶段 4 完成总结报告 |
 | [TEST-COVERAGE-REPORT.md](reports/TEST-COVERAGE-REPORT.md) | ✅ 已完成 | 2026-02-05 | 测试覆盖率详细报告 |
 | [test-plan.md](reports/test-plan.md) | ✅ 已完成 | 2026-02-05 | 综合测试计划文档 |
+| [Agent 模式报告](reports/agent-mode/README.md) | ✅ 已完成 | 2025-02-05 | Agent 模式完整报告集 |
 
 ---
 
