@@ -55,7 +55,14 @@ describe('Response Time Performance Tests', () => {
     }
   });
 
-  const testIfEnabled = serverRunning ? test : test.skip;
+  const testIfEnabled = (name, callback, timeout) => {
+    test(name, async () => {
+      if (!serverRunning) {
+        return;
+      }
+      await callback();
+    }, timeout);
+  };
 
   describe('Health Check Performance', () => {
     testIfEnabled('should respond to health check quickly', async () => {

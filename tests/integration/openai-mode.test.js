@@ -59,7 +59,14 @@ describe('OpenAI Mode Integration Tests', () => {
   });
 
   // Skip all tests if server is not running or axios not available
-  const testIfEnabled = serverRunning && testsEnabled ? test : test.skip;
+  const testIfEnabled = (name, callback, timeout) => {
+    test(name, async () => {
+      if (!serverRunning || !testsEnabled) {
+        return;
+      }
+      await callback();
+    }, timeout);
+  };
 
   describe('Health Check', () => {
     testIfEnabled('should return health status', async () => {

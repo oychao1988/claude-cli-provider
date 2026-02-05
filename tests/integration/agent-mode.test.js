@@ -54,7 +54,14 @@ describe('Agent Mode Integration Tests', () => {
   });
 
   // Skip all tests if server is not running or axios not available
-  const testIfEnabled = serverRunning && testsEnabled ? test : test.skip;
+  const testIfEnabled = (name, callback, timeout) => {
+    test(name, async () => {
+      if (!serverRunning || !testsEnabled) {
+        return;
+      }
+      await callback();
+    }, timeout);
+  };
 
   describe('POST /v1/agent/chat - Basic Functionality', () => {
     testIfEnabled('should create a new session and return response', async () => {
