@@ -1,5 +1,14 @@
 FROM node:18-alpine
 
+# 安装构建工具（node-pty 需要）
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    linux-headers \
+    libgcc \
+    libstdc++
+
 # 使用淘宝 npm 镜像源加速
 RUN npm config set registry https://registry.npmmirror.com
 
